@@ -21,6 +21,7 @@ FROM node:24-slim AS builder
 
 # Build argument to specify which example to build (simple, react, or isaac)
 ARG EXAMPLE_NAME=simple
+ARG DEPLOYMENT_NAME=dev-server
 
 WORKDIR /app
 
@@ -39,4 +40,4 @@ RUN npm install
 RUN npm run build
 
 # Serve static files directly without Nginx
-CMD ["npm", "run", "dev-server", "--", "--port", "443"]
+CMD ["npm", "run", "${DEPLOYMENT_NAME}", "--", "--port", "443"]
