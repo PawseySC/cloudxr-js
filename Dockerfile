@@ -31,89 +31,12 @@ COPY ${EXAMPLE_NAME}/ ./
 # Copy CloudXR SDK tarball from root directory (shared by all examples)
 COPY nvidia-cloudxr-*.tgz ./cloudxr-sdk.tgz
 
+COPY webpack-nvidia-cloudxr-alias.cjs ../
+
 # Install CloudXR SDK and dependencies
-RUN npm install ./cloudxr-sdk.tgz && \
-    npm install && \
-    npm run build
+RUN npm install ./cloudxr-sdk.tgz
+RUN npm install 
+RUN npm run build
 
-# Production stage - serve built files with nginx
-FROM nginx:alpine
-
-# Build argument (passed from builder stage)
-ARG EXAMPLE_NAME=simple
-
-# Copy built files from builder stage
-COPY --from=builder /app/build /usr/share/nginx/html
-
-# Install OpenSSL for HTTPS support (always enabled)
-RUN apk add --no-cache openssl
-
-# Create nginx configuration for both HTTP and HTTPS
-RUN cat > /etc/nginx/conf.d/default.conf <<'EOF'
-server {
-    listen 80;
-    server_name localhost;
-    
-    root /usr/share/nginx/html;
-    index index.html;
-    
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-    
-    # Enable CORS
-    add_header 'Access-Control-Allow-Origin' '*' always;
-    add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
-    add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
-}
-
-server {
-    listen 443 ssl;
-    server_name localhost;
-    
-    # SSL certificate paths (generated at startup)
-    ssl_certificate /etc/nginx/ssl/server.crt;
-    ssl_certificate_key /etc/nginx/ssl/server.key;
-    
-    root /usr/share/nginx/html;
-    index index.html;
-    
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-    
-    # Enable CORS
-    add_header 'Access-Control-Allow-Origin' '*' always;
-    add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
-    add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
-}
-EOF
-
-# Create entrypoint script for SSL certificate generation
-RUN cat > /docker-entrypoint.sh <<'EOF'
-#!/bin/sh
-set -e
-
-# Generate self-signed SSL certificate if it doesn't exist
-if [ ! -f /etc/nginx/ssl/server.crt ]; then
-    echo "🔐 Generating self-signed SSL certificate..."
-    mkdir -p /etc/nginx/ssl
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-        -keyout /etc/nginx/ssl/server.key \
-        -out /etc/nginx/ssl/server.crt \
-        -subj "/C=US/ST=CA/L=Santa Clara/O=NVIDIA/CN=localhost"
-    echo "✅ SSL certificate generated"
-else
-    echo "✅ Using existing SSL certificate"
-fi
-
-# Start nginx
-echo "Starting nginx on ports 80 (HTTP) and 443 (HTTPS)..."
-exec nginx -g 'daemon off;'
-EOF
-
-RUN chmod +x /docker-entrypoint.sh
-
-EXPOSE 80 443
-
-ENTRYPOINT ["/docker-entrypoint.sh"]
+# Serve static files directly without Nginx
+CMD ["npm", "run", "dev-server", "--", "--port", "443"]
